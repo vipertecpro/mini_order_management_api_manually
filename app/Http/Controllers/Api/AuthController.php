@@ -7,9 +7,42 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use OpenApi\Attributes as OA;
 
 class AuthController extends Controller
 {
+    #[OA\Post(
+        path: '/api/register',
+        summary: 'Create a user and return an API token',
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['name', 'email', 'password', 'password_confirmation'],
+                properties: [
+                    new OA\Property(property: 'name', type: 'string', example: 'Wasim'),
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'wasim@example.com'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 8, example: 'password123'),
+                    new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', example: 'password123'),
+                ]
+            )
+        ),
+        tags: ['Auth'],
+        responses: [
+            new OA\Response(
+                response: 201,
+                description: 'Registered',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'User registered successfully.'),
+                        new OA\Property(property: 'token', type: 'string', example: '1|fW4pSqtflM...'),
+                        new OA\Property(property: 'user', type: 'object'),
+                    ]
+                )
+            ),
+            new OA\Response(response: 422, ref: '#/components/responses/ValidationError'),
+            new OA\Response(response: 429, ref: '#/components/responses/TooManyRequests'),
+        ]
+    )]
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -29,6 +62,45 @@ class AuthController extends Controller
         ], 201);
     }
 
+    #[OA\Post(
+        path: '/api/login',
+        summary: 'Exchange credentials for an API token',
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['email', 'password'],
+                properties: [
+                    new OA\Property(property: 'email', type: 'string', format: 'email', example: 'test@example.com'),
+                    new OA\Property(property: 'password', type: 'string', format: 'password', example: 'password'),
+                ]
+            )
+        ),
+        tags: ['Auth'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Logged in',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Login successful.'),
+                        new OA\Property(property: 'token', type: 'string', example: '1|fW4pSqtflM...'),
+                        new OA\Property(property: 'user', type: 'object'),
+                    ]
+                )
+            ),
+            new OA\Response(
+                response: 422,
+                description: 'Invalid credentials, or validation failed',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Invalid credentials.'),
+                        new OA\Property(property: 'errors', type: 'object', example: ['email' => ['Invalid credentials.']]),
+                    ]
+                )
+            ),
+            new OA\Response(response: 429, ref: '#/components/responses/TooManyRequests'),
+        ]
+    )]
     public function login(Request $request)
     {
         $request->validate([
@@ -53,6 +125,24 @@ class AuthController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: '/api/logout',
+        summary: 'Revoke the token used for this request',
+        security: [['bearerAuth' => []]],
+        tags: ['Auth'],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Logged out',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Logged out successfully.'),
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, ref: '#/components/responses/Unauthenticated'),
+        ]
+    )]
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();

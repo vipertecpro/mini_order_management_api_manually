@@ -201,7 +201,53 @@ If it keyed on IP alone, everyone in one office behind the same connection would
 
 `auth` is per IP on purpose — nobody is authenticated yet at that point, so IP is all there is to throttle on.
 
-## Step 9 — Seeders
+## Step 9 — Swagger docs
+
+- Run:
+```bash
+composer require darkaonline/l5-swagger
+php artisan vendor:publish --provider "L5Swagger\L5SwaggerServiceProvider"
+```
+
+The docs are written as PHP 8 attributes right above the method they describe, so they sit next to the code and are hard to forget about when a route changes:
+```php
+#[OA\Post(
+    path: '/api/orders',
+    summary: 'Place an order',
+    security: [['bearerAuth' => []]],
+    ...
+)]
+public function store(StoreOrderRequest $request)
+```
+
+The shared pieces live in the base `app/Http/Controllers/Controller.php` — the `Info` block, the server URL, the bearer security scheme, and the error responses (401, 403, 404, 422, 429) that nearly every endpoint repeats. Each endpoint then just points at them:
+```php
+new OA\Response(response: 401, ref: '#/components/responses/Unauthenticated'),
+```
+Otherwise the same fifteen lines of "Unauthenticated" get copy pasted eleven times.
+
+The response bodies are `#[OA\Schema]` attributes on the API resources — `ProductResource`, `OrderResource`, `OrderItemResource` — because that is the class that decides the shape, so if i add a field there the schema is right there to update too.
+
+Two env values:
+```env
+L5_SWAGGER_CONST_HOST="${APP_URL}"
+L5_SWAGGER_GENERATE_ALWAYS=true
+```
+The first puts the right host in the "Servers" dropdown so *Try it out* actually hits your machine. The second regenerates the spec on every page load, which you want in development and would turn off in production.
+
+Regenerate by hand with:
+```bash
+php artisan l5-swagger:generate
+```
+
+| | |
+| --- | --- |
+| Swagger UI | `/api/documentation` |
+| OpenAPI JSON | `/docs` |
+
+To try a protected route: run **Auth → login**, copy the `token` out of the response, hit **Authorize** at the top right and paste it in. Every request after that carries the bearer header.
+
+## Step 10 — Seeders
 
 ```bash
 php artisan make:seeder ProductSeeder
@@ -210,7 +256,7 @@ php artisan migrate:fresh --seed
 
 Gives you a `test@example.com` user (password `password`) and 30 products to poke at.
 
-## Step 10 — Tests
+## Step 11 — Tests
 
 ```bash
 php artisan test
@@ -250,6 +296,8 @@ In a second terminal, so orders get processed and emails go out:
 ```bash
 php artisan queue:work
 ```
+
+Then open **http://localhost:8000/api/documentation** for the Swagger UI — every endpoint below is documented there and you can call them straight from the page.
 
 ## Endpoints
 
